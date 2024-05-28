@@ -1,5 +1,6 @@
 const mysql = require("mysql2");
 const inquirer = require("inquirer");
+const express = require("express");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -73,8 +74,9 @@ function viewAllDepartments() {
 
 function viewAllRoles() {
   db.query(
-    `SELECT r.title, r.id, r.salary, d.name 
-  FROM role r JOIN departnemt d ON r.department_id = d.id;`,
+    `SELECT r.id, r.title, r.salary, d.name AS department
+  FROM role r
+  LEFT JOIN department d ON r.department_id = d.id`,
     (err, res) => {
       if (err) throw err;
       console.table(res);
@@ -85,12 +87,12 @@ function viewAllRoles() {
 
 function viewAllEmployees() {
   db.query(
-    `SELECT e.id, e.first_name, e.last_name, 
-  r.title, d.name AS department, r.salary, 
-  CONCAT(m.first_name, ' ', m.last_name) as manager
-  FROM employee e JOIN role r ON e.role_id = r.id
-  JOIN department d ON r.department_id = d.id
-  JOIN employee m ON e.manager_id = m.id;`,
+    `SELECT e.id, e.first_name, e.last_name, r.title, d.name AS department, r.salary, 
+  CONCAT(m.first_name, ' ', m.last_name) AS manager
+  FROM employee e
+  LEFT JOIN role r ON e.role_id = r.id
+  LEFT JOIN department d ON r.department_id = d.id
+  LEFT JOIN employee m ON e.manager_id = m.id`,
     (err, res) => {
       if (err) throw err;
       console.table(res);
@@ -146,7 +148,7 @@ function addRole() {
           (department) => department.name === answer.department
         );
         db.query(
-          `INSERT INTO roles SET ?`,
+          `INSERT INTO roles (title), (salary) VALUES (${answer.title}, ${answer.salary})`,
           {
             title: answer.title,
             salary: answer.salary,
@@ -154,6 +156,7 @@ function addRole() {
           },
           (err, res) => {
             console.log(`Added ${answer.title} to the list of roles.`);
+            run();
           }
         );
       });
@@ -161,10 +164,74 @@ function addRole() {
 }
 
 function addEmployee() {
-  
+  inquirer
+    .prompt([
+      {
+        name: "first_name",
+        type: "input",
+        message: "What is the employee's first name?",
+      },
+      {
+        name: "last_name",
+        type: "input",
+        message: "What is the employee's last name?",
+      },
+      {
+        name: "role_id",
+        type: "input",
+        message: "What is the employee's role ID?",
+      },
+      {
+        name: "manager_id",
+        type: "input",
+        message: "What is the employee's manager's ID? (Leave blank if none)",
+        default: null,
+      },
+    ])
+    .then((answer) => {
+      db.query(
+        `INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?, ?, ?, ?)`,
+        [
+          answer.first_name,
+          answer.last_name,
+          answer.role_id,
+          answer.manager_id,
+        ],
+        (err, res) => {
+          if (err) throw err;
+          console.log("Employee added.");
+          run();
+        }
+      );
+    });
 }
 
-function updateEmployeeRole() {}
+function updateEmployeeRole() {
+  inquirer
+    .prompt([
+      {
+        name: "employee_id",
+        type: "input",
+        message: "What is the employee's ID?",
+      },
+      {
+        name: "role_id",
+        type: "input",
+        message: "What is the new role ID?",
+      },
+    ])
+    .then((answer) => {
+      db.query(
+        `UPDATE employee SET role_id = ? WHERE id = ?`,
+        [answer.role_id, answer.employee_id],
+        (err, res) => {
+          if (err) throw err;
+          console.log("Employee role updated.");
+          run();
+        }
+      );
+    });
+}
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
