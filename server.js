@@ -109,9 +109,9 @@ function addDepartment() {
       message: "What is the name of the department?",
     })
     .then((answer) => {
-      console.log(answer.name);
       db.query(
-        `INSERT INTO department (name) VALUES ("${answer.name}")`,
+        `INSERT INTO department (name) VALUES (?)`,
+        [answer.name],
         (err, res) => {
           if (err) throw err;
           console.log(`Added ${answer.name} to list of departments.`);
@@ -148,13 +148,10 @@ function addRole() {
           (department) => department.name === answer.department
         );
         db.query(
-          `INSERT INTO roles (title), (salary) VALUES (${answer.title}, ${answer.salary})`,
-          {
-            title: answer.title,
-            salary: answer.salary,
-            department_id: department,
-          },
+          `INSERT INTO role (title, salary, department_id) VALUES (?, ?, ?)`,
+          [answer.title, answer.salary, department.id],
           (err, res) => {
+            if (err) throw err;
             console.log(`Added ${answer.title} to the list of roles.`);
             run();
           }
@@ -189,13 +186,14 @@ function addEmployee() {
       },
     ])
     .then((answer) => {
+      const manager_id = answer.manager_id === '' ? null : answer.manager_id;
       db.query(
         `INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?, ?, ?, ?)`,
         [
           answer.first_name,
           answer.last_name,
           answer.role_id,
-          answer.manager_id,
+          manager_id,
         ],
         (err, res) => {
           if (err) throw err;
@@ -207,30 +205,44 @@ function addEmployee() {
 }
 
 function updateEmployeeRole() {
-  inquirer
-    .prompt([
-      {
-        name: "employee_id",
-        type: "input",
-        message: "What is the employee's ID?",
-      },
-      {
-        name: "role_id",
-        type: "input",
-        message: "What is the new role ID?",
-      },
-    ])
-    .then((answer) => {
-      db.query(
-        `UPDATE employee SET role_id = ? WHERE id = ?`,
-        [answer.role_id, answer.employee_id],
-        (err, res) => {
-          if (err) throw err;
-          console.log("Employee role updated.");
-          run();
-        }
-      );
+  db.query(`SELECT * FROM employee`, (err, employees) => {
+    if (err) throw err;
+    db.query(`SELECT * FROM role`, (err, roles) => {
+      if (err) throw err;
+      inquirer
+        .prompt([
+          {
+            name: "employee_id",
+            type: "list",
+            message: "Which employee's role do you want to update?",
+            choices: employees.map((employee) => ({
+              name: `${employee.first_name} ${employee.last_name}`,
+              value: employee.id,
+            })),
+          },
+          {
+            name: "role_id",
+            type: "list",
+            message: "What is the new role?",
+            choices: roles.map((role) => ({
+              name: role.title,
+              value: role.id,
+            })),
+          },
+        ])
+        .then((answer) => {
+          db.query(
+            `UPDATE employee SET role_id = ? WHERE id = ?`,
+            [answer.role_id, answer.employee_id],
+            (err, res) => {
+              if (err) throw err;
+              console.log("Employee role updated.");
+              run();
+            }
+          );
+        });
     });
+  });
 }
 
 app.listen(PORT, () => {
